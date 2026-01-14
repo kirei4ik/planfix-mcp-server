@@ -9,6 +9,7 @@ import {
 import { customFieldsConfig } from "../customFieldsConfig.js";
 import { extendSchemaWithCustomFields } from "../lib/extendSchemaWithCustomFields.js";
 import { extendFiltersWithCustomFields } from "../lib/extendFiltersWithCustomFields.js";
+import type { ContactResponse } from "../types.js";
 
 const PlanfixSearchContactInputSchemaBase = z.object({
   name: z.string().optional(),
@@ -30,20 +31,15 @@ export const PlanfixSearchContactOutputSchema = z.object({
   lastName: z.string().optional(),
   error: z.string().optional(),
   found: z.boolean(),
+  telegram: z.string().optional(),
 });
 
-/**
- * Search for a contact in Planfix by name, phone, email, or telegram.
- * This is a placeholder implementation that should be replaced with actual Planfix API calls.
- */
 export async function planfixSearchContact(
   args: z.infer<typeof PlanfixSearchContactInputSchema>,
 ): Promise<z.infer<typeof PlanfixSearchContactOutputSchema>> {
   const { name, nameTranslated, email, telegram } = args;
   let { phone } = args;
-  // console.log('Searching Planfix contact...');
   let contactId: number | null = null;
-  // If phone looks like a Telegram username (starts with @) or doesn't look like a phone number, set it to empty string
   if (phone && (phone.startsWith("@") || !/^[+\d\s\-()]{5,}$/.test(phone))) {
     phone = "";
   }
@@ -116,9 +112,41 @@ export async function planfixSearchContact(
           ? {
               type: 4226,
               operator: "equal",
-              value: telegram.replace(/^@/, "").toLowerCase(),
+              value: `@${telegram.replace(/^@/, "").toLowerCase()}`,
             }
           : undefined,
+    byTelegramOriginalCase: telegram
+      ? PLANFIX_FIELD_IDS.telegramCustom
+        ? {
+            type: 4101,
+            field: PLANFIX_FIELD_IDS.telegramCustom,
+            operator: "equal",
+            value: telegram.replace(/^@/, ""),
+          }
+        : PLANFIX_FIELD_IDS.telegram
+          ? {
+              type: 4226,
+              operator: "equal",
+              value: telegram.replace(/^@/, ""),
+            }
+          : undefined
+      : undefined,
+    byTelegramOriginalCaseWithAt: telegram
+      ? PLANFIX_FIELD_IDS.telegramCustom
+        ? {
+            type: 4101,
+            field: PLANFIX_FIELD_IDS.telegramCustom,
+            operator: "equal",
+            value: telegram.startsWith("@") ? telegram : `@${telegram}`,
+          }
+        : PLANFIX_FIELD_IDS.telegram
+          ? {
+              type: 4226,
+              operator: "equal",
+              value: telegram.startsWith("@") ? telegram : `@${telegram}`,
+            }
+          : undefined
+      : undefined,
   };
 
   const customFilters: FilterType[] = [];
@@ -128,6 +156,22 @@ export async function planfixSearchContact(
     customFieldsConfig.contactFields,
     "contact",
   );
+
+  function extractTelegramFromContact(
+    contact: ContactResponse,
+  ): string {
+    if (PLANFIX_FIELD_IDS.telegramCustom) {
+      const tgField = contact.customFieldData?.find(
+        (f) => f.field.id === PLANFIX_FIELD_IDS.telegramCustom,
+      );
+      if (tgField && typeof tgField.value === "string") {
+        return tgField.value.replace(/^@/, "").toLowerCase();
+      }
+    } else if (PLANFIX_FIELD_IDS.telegram && contact.telegram) {
+      return contact.telegram.replace(/^@/, "").toLowerCase();
+    }
+    return "";
+  }
 
   async function searchWithFilter(
     filter: FilterType,
@@ -140,16 +184,18 @@ export async function planfixSearchContact(
           filters: [filter],
         },
       })) as {
-        contacts?: Array<{ id: number; name?: string; lastname?: string }>;
+        contacts?: Array<ContactResponse>;
       };
 
       if (result.contacts?.[0]) {
         const contact = result.contacts[0];
+        const contactTelegram = extractTelegramFromContact(contact);
         return {
           contactId: contact.id,
           firstName: contact.name,
           lastName: contact.lastname,
           found: true,
+          telegram: contactTelegram || undefined,
         };
       }
 
@@ -181,10 +227,20 @@ export async function planfixSearchContact(
       result = await searchWithFilter(filters.byPhone);
       contactId = result.contactId;
     }
-    // Only search by name if both first and last names are provided (contains a space)
     if (!contactId && name && name.trim().includes(" ") && filters.byName) {
       result = await searchWithFilter(filters.byName);
       contactId = result.contactId;
+      if (telegram && contactId > 0 && result.telegram) {
+        const expectedTelegram = telegram.replace(/^@/, "").toLowerCase();
+        const foundTelegram = result.telegram;
+        if (expectedTelegram !== foundTelegram) {
+          log(
+            `[planfixSearchContact] Telegram не совпадает: ожидался "${telegram}", найден "${result.telegram}"`,
+          );
+          contactId = null;
+          result = undefined;
+        }
+      }
     }
     if (
       !contactId &&
@@ -194,16 +250,33 @@ export async function planfixSearchContact(
     ) {
       result = await searchWithFilter(filters.byNameTranslated);
       contactId = result.contactId;
+      if (telegram && contactId > 0 && result.telegram) {
+        const expectedTelegram = telegram.replace(/^@/, "").toLowerCase();
+        const foundTelegram = result.telegram;
+        if (expectedTelegram !== foundTelegram) {
+          log(
+            `[planfixSearchContact] Telegram не совпадает: ожидался "${telegram}", найден "${result.telegram}"`,
+          );
+          contactId = null;
+          result = undefined;
+        }
+      }
     }
     if (!contactId && telegram) {
-      // First try without @
       if (filters.byTelegram) {
         result = await searchWithFilter(filters.byTelegram);
         contactId = result.contactId;
       }
-      // If not found, try with @
       if (!contactId && filters.byTelegramWithAt) {
         result = await searchWithFilter(filters.byTelegramWithAt);
+        contactId = result.contactId;
+      }
+      if (!contactId && filters.byTelegramOriginalCase) {
+        result = await searchWithFilter(filters.byTelegramOriginalCase);
+        contactId = result.contactId;
+      }
+      if (!contactId && filters.byTelegramOriginalCaseWithAt) {
+        result = await searchWithFilter(filters.byTelegramOriginalCaseWithAt);
         contactId = result.contactId;
       }
     }
