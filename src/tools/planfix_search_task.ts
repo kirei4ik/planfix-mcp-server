@@ -113,8 +113,8 @@ export async function searchPlanfixTask({
         }>;
       };
       const totalTasks = result.tasks?.length ?? 0;
-      if (result.tasks?.[0]) {
-        const task = result.tasks[0];
+      if (result.tasks && result.tasks.length > 0) {
+        const task = result.tasks[result.tasks.length - 1];
         return {
           taskId: task.id,
           assignees: task.assignees,
