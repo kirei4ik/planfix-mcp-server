@@ -147,6 +147,22 @@ export async function planfixSearchContact(
             }
           : undefined
       : undefined,
+    byTelegramUrl: telegram
+      ? PLANFIX_FIELD_IDS.telegramCustom
+        ? {
+            type: 4101,
+            field: PLANFIX_FIELD_IDS.telegramCustom,
+            operator: "equal",
+            value: `https://t.me/${telegram.replace(/^@/, "")}`,
+          }
+        : PLANFIX_FIELD_IDS.telegram
+          ? {
+              type: 4226,
+              operator: "equal",
+              value: `https://t.me/${telegram.replace(/^@/, "")}`,
+            }
+          : undefined
+      : undefined,
   };
 
   const customFilters: FilterType[] = [];
@@ -157,9 +173,7 @@ export async function planfixSearchContact(
     "contact",
   );
 
-  function extractTelegramFromContact(
-    contact: ContactResponse,
-  ): string {
+  function extractTelegramFromContact(contact: ContactResponse): string {
     if (PLANFIX_FIELD_IDS.telegramCustom) {
       const tgField = contact.customFieldData?.find(
         (f) => f.field.id === PLANFIX_FIELD_IDS.telegramCustom,
@@ -277,6 +291,10 @@ export async function planfixSearchContact(
       }
       if (!contactId && filters.byTelegramOriginalCaseWithAt) {
         result = await searchWithFilter(filters.byTelegramOriginalCaseWithAt);
+        contactId = result.contactId;
+      }
+      if (!contactId && filters.byTelegramUrl) {
+        result = await searchWithFilter(filters.byTelegramUrl);
         contactId = result.contactId;
       }
     }

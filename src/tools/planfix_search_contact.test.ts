@@ -85,4 +85,52 @@ describe("planfixSearchContact", () => {
     expect(result.error).toBeUndefined();
     expect(result.found).toBe(false);
   });
+
+  it("searches by telegram URL with value https://t.me/<username> (no lowercase)", async () => {
+    mockPlanfixRequest
+      .mockResolvedValueOnce({ contacts: [] })
+      .mockResolvedValueOnce({ contacts: [] })
+      .mockResolvedValueOnce({ contacts: [] })
+      .mockResolvedValueOnce({ contacts: [] })
+      .mockResolvedValueOnce({
+        contacts: [{ id: 42, name: "User", lastname: "Name" }],
+      });
+
+    const result = await planfixSearchContact({
+      telegram: "iiirrrrrraaaaa",
+    });
+
+    expect(mockPlanfixRequest).toHaveBeenCalledTimes(5);
+    const byTelegramUrlCall = mockPlanfixRequest.mock.calls[4][0];
+    const body = (
+      byTelegramUrlCall.body as { filters: Array<{ value: string }> }
+    ).filters[0];
+    expect(body.value).toBe("https://t.me/iiirrrrrraaaaa");
+    expect(result.contactId).toBe(42);
+    expect(result.found).toBe(true);
+  });
+
+  it("searches by telegram URL preserving case for @username input", async () => {
+    mockPlanfixRequest
+      .mockResolvedValueOnce({ contacts: [] })
+      .mockResolvedValueOnce({ contacts: [] })
+      .mockResolvedValueOnce({ contacts: [] })
+      .mockResolvedValueOnce({ contacts: [] })
+      .mockResolvedValueOnce({
+        contacts: [{ id: 1, name: "Some", lastname: "User" }],
+      });
+
+    const result = await planfixSearchContact({
+      telegram: "@SomeUser",
+    });
+
+    expect(mockPlanfixRequest).toHaveBeenCalledTimes(5);
+    const byTelegramUrlCall = mockPlanfixRequest.mock.calls[4][0];
+    const body = (
+      byTelegramUrlCall.body as { filters: Array<{ value: string }> }
+    ).filters[0];
+    expect(body.value).toBe("https://t.me/SomeUser");
+    expect(result.contactId).toBe(1);
+    expect(result.found).toBe(true);
+  });
 });
