@@ -20,5 +20,5 @@ EXPOSE 3000
 
 # Отключаем dotenv явно, используем только нативные env vars Docker
 ENV NODE_ENV=production
-# Запускаем в SSE режиме (HTTP сервер)
-CMD ["node", "dist/index.js", "--sse"]
+# Запускаем в SSE режиме (HTTP сервер) через npm script
+CMD ["npm", "run", "sse"]
