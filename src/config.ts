@@ -6,7 +6,9 @@ import dotenv from "dotenv";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 process.chdir(path.join(__dirname, ".."));
-dotenv.config();
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config();
+}
 
 // Planfix API configuration
 export const PLANFIX_ACCOUNT = process.env.PLANFIX_ACCOUNT || "";
