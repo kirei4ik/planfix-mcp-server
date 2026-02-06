@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  planfix-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # Обязательные
+      - PLANFIX_ACCOUNT=${PLANFIX_ACCOUNT}
+      - PLANFIX_TOKEN=${PLANFIX_TOKEN}
+      
+      # Поля (заполни свои ID из Planfix)
+      - PLANFIX_FIELD_ID_EMAIL=${PLANFIX_FIELD_ID_EMAIL}
+      - PLANFIX_FIELD_ID_PHONE=${PLANFIX_FIELD_ID_PHONE}
+      - PLANFIX_FIELD_ID_TELEGRAM=${PLANFIX_FIELD_ID_TELEGRAM:-1}
+      - PLANFIX_FIELD_ID_TELEGRAM_CUSTOM=${PLANFIX_FIELD_ID_TELEGRAM_CUSTOM}
+      - PLANFIX_FIELD_ID_CLIENT=${PLANFIX_FIELD_ID_CLIENT}
+      - PLANFIX_FIELD_ID_MANAGER=${PLANFIX_FIELD_ID_MANAGER}
+      - PLANFIX_FIELD_ID_AGENCY=${PLANFIX_FIELD_ID_AGENCY}
+      - PLANFIX_FIELD_ID_LEAD_SOURCE=${PLANFIX_FIELD_ID_LEAD_SOURCE}
+      - PLANFIX_FIELD_ID_LEAD_SOURCE_VALUE=${PLANFIX_FIELD_ID_LEAD_SOURCE_VALUE}
+      - PLANFIX_FIELD_ID_PIPELINE=${PLANFIX_FIELD_ID_PIPELINE}
+      - PLANFIX_FIELD_ID_TAGS=${PLANFIX_FIELD_ID_TAGS}
+      - PLANFIX_FIELD_ID_LEAD_ID=${PLANFIX_FIELD_ID_LEAD_ID}
+      - PLANFIX_LEAD_TEMPLATE_ID=${PLANFIX_LEAD_TEMPLATE_ID}
+      - PLANFIX_TASK_TITLE_TEMPLATE=${PLANFIX_TASK_TITLE_TEMPLATE:-{name}}
+      
+      # Опционально: путь к конфигу внутри контейнера
+      - PLANFIX_CONFIG=/app/data/config.yml
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      
+    volumes:
+      # Persistent storage для кэша и логов (ВАЖНО!)
+      - planfix-data:/app/data
+      
+      # Опционально: если хочешь редактировать config.yml через Coolify UI
+      - type: bind
+        source: ./config.yml
+        target: /app/data/config.yml
+        read_only: true
+        
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+      
+    restart: unless-stopped
+
+volumes:
+  planfix-data:
+    driver: local
