@@ -19,6 +19,6 @@ RUN mkdir -p /app/data
 EXPOSE 3000
 
 # Отключаем dotenv явно, используем только нативные env vars Docker
-NV NODE_ENV=production
+ENV NODE_ENV=production
 # Запускаем в SSE режиме (HTTP сервер)
 CMD ["node", "dist/index.js", "--sse"]
